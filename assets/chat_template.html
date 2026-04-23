@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OpenCode Session - {{SHARE_ID}}</title>
+<style>
+:root {
+    --bg: #0f0e0e; --bg2: #181616; --bg3: #201d1d; --bg4: #2a2626;
+    --text: #e8e4e0; --text2: #b0a8a0; --text3: #807870; --text4: #605850;
+    --border: #2a2525; --border2: #3a3535;
+    --user-accent: #4a9a4a; --user-bg: #141e14; --user-border: #1e2e1e;
+    --assistant-accent: #6b8afd;
+    --reasoning-accent: #8b7afd; --reasoning-bg: #16141e; --reasoning-border: #28203a;
+    --tool-accent: #5ba85b; --tool-bg: #141e14; --tool-border: #1e3a1e;
+    --changes-accent: #da8a3a; --changes-bg: #1e1a14; --changes-border: #3a2e1e;
+    --added: #4a9a4a; --removed: #da4a4a; --cmd: #7adfb8; --prompt: #5ba85b;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+html { scroll-behavior:smooth; }
+body {
+    font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Noto Sans SC',Roboto,sans-serif;
+    font-size:14px; line-height:1.6; color:var(--text); background:var(--bg);
+}
+.page-container { max-width:900px; margin:0 auto; padding:24px 20px 80px; }
+.page-header { margin-bottom:24px; padding-bottom:16px; border-bottom:1px solid var(--border); }
+.page-header h1 { font-size:22px; font-weight:600; margin-bottom:6px; }
+.page-header .meta { color:var(--text3); font-size:13px; }
+.toc { background:var(--bg2); border:1px solid var(--border); border-radius:8px; padding:16px 20px 16px 32px; margin-bottom:28px; }
+.toc h3 { font-size:13px; color:var(--text3); margin-bottom:10px; text-transform:uppercase; letter-spacing:0.5px; }
+.toc ol { column-count:2; column-gap:24px; list-style:decimal; }
+.toc li { margin-bottom:4px; break-inside:avoid; font-size:13px; }
+.toc a { color:var(--assistant-accent); text-decoration:none; }
+.toc a:hover { text-decoration:underline; }
+.turn { margin-bottom:28px; position:relative; padding-left:40px; }
+.turn-number { position:absolute; left:0; top:4px; font-size:12px; font-weight:600; color:var(--text4); width:30px; text-align:right; }
+.msg { margin-bottom:8px; }
+.msg-header { display:flex; align-items:center; gap:8px; margin-bottom:4px; }
+.msg-role { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.8px; }
+.user-role { color:var(--user-accent); }
+.assistant-role { color:var(--assistant-accent); }
+.msg-meta { color:var(--text4); font-size:11px; }
+.user-body { background:var(--user-bg); border:1px solid var(--user-border); border-radius:8px; padding:10px 14px; }
+.msg-text { color:var(--text); font-size:14px; white-space:pre-wrap; word-break:break-word; line-height:1.6; }
+.assistant-body { background:var(--bg2); border-radius:8px; padding:10px 14px; }
+.part { margin-bottom:10px; }
+.part:last-child { margin-bottom:0; }
+.part-header { display:flex; align-items:center; gap:6px; margin-bottom:6px; cursor:pointer; user-select:none; padding:3px 6px; border-radius:4px; transition:background 0.15s; }
+.part-header:hover { background:var(--bg3); }
+.part-icon { font-size:13px; }
+.part-label { font-size:12px; font-weight:600; }
+.reasoning-header .part-label { color:var(--reasoning-accent); }
+.tool-header .part-label { color:var(--tool-accent); }
+.changes-header .part-label { color:var(--changes-accent); }
+.toggle-hint { font-size:10px; color:var(--text4); margin-left:auto; }
+.no-output-hint { font-size:11px; color:var(--text4); margin-left:8px; }
+.reasoning-part { border-left:3px solid var(--reasoning-border); padding-left:10px; margin-left:2px; }
+.reasoning-content { color:var(--text2); font-size:13px; line-height:1.6; }
+.reasoning-content p { margin-bottom:6px; }
+.reasoning-content code { background:var(--bg3); padding:1px 4px; border-radius:3px; font-family:'SF Mono','Fira Code',monospace; font-size:12px; }
+.tool-part { border:1px solid var(--tool-border); border-radius:6px; padding:8px 10px; background:var(--tool-bg); }
+.tool-part.no-output { padding:4px 10px; }
+.tool-output { font-family:'SF Mono','Fira Code',monospace; font-size:12px; line-height:1.5; color:var(--text2); max-height:500px; overflow-y:auto; white-space:pre; word-break:normal; background:var(--bg); border-radius:4px; padding:8px 10px; margin:0; }
+.cmd-line { color:var(--cmd); }
+.prompt { color:var(--prompt); font-weight:700; }
+.line-added { color:var(--added); }
+.line-removed { color:var(--removed); }
+.line-normal { color:var(--text2); }
+.text-content { color:var(--text); line-height:1.7; font-size:14px; }
+.text-content p { margin-bottom:8px; }
+.text-content code { background:var(--bg3); padding:1px 5px; border-radius:3px; font-family:'SF Mono','Fira Code',monospace; font-size:12px; color:var(--cmd); }
+.text-content pre { background:var(--bg); padding:12px 14px; border-radius:6px; overflow-x:auto; margin:8px 0; font-family:'SF Mono','Fira Code',monospace; font-size:12px; line-height:1.5; border:1px solid var(--border); }
+.text-content pre code { background:none; padding:0; color:var(--text2); }
+.text-content ul,.text-content ol { margin-left:20px; margin-bottom:8px; }
+.text-content li { margin-bottom:4px; }
+.text-content h1,.text-content h2,.text-content h3,.text-content h4 { margin:14px 0 6px; color:var(--text); font-weight:600; }
+.text-content h1 { font-size:18px; } .text-content h2 { font-size:16px; } .text-content h3 { font-size:15px; }
+.text-content a { color:var(--assistant-accent); text-decoration:none; }
+.text-content a:hover { text-decoration:underline; }
+.text-content blockquote { border-left:3px solid var(--border2); padding-left:12px; color:var(--text2); margin:8px 0; }
+.text-content table { border-collapse:collapse; width:100%; margin:8px 0; font-size:13px; }
+.text-content th,.text-content td { border:1px solid var(--border); padding:6px 10px; text-align:left; }
+.text-content th { background:var(--bg3); font-weight:600; }
+.text-content strong { color:var(--text); font-weight:600; }
+.text-content hr { border:none; border-top:1px solid var(--border); margin:12px 0; }
+.compaction-divider { display:flex; align-items:center; gap:12px; margin:12px 0; color:var(--text4); font-size:11px; text-transform:uppercase; letter-spacing:0.5px; }
+.compaction-line { flex:1; height:1px; background:var(--border); }
+.changes-part { border:1px solid var(--changes-border); border-radius:6px; padding:8px 10px; background:var(--changes-bg); }
+.changes-content { font-size:13px; overflow-x:auto; font-family:'SF Mono','Fira Code',monospace; }
+.part.collapsed .part-content { display:none; }
+.search-box { margin-bottom:20px; }
+.search-box input { width:100%; padding:8px 12px; background:var(--bg2); border:1px solid var(--border); border-radius:6px; color:var(--text); font-size:13px; outline:none; }
+.search-box input:focus { border-color:var(--assistant-accent); }
+.search-box input::placeholder { color:var(--text4); }
+.stats { display:flex; gap:12px; margin-bottom:20px; flex-wrap:wrap; }
+.stat { background:var(--bg2); border:1px solid var(--border); border-radius:6px; padding:6px 12px; font-size:13px; }
+.stat-value { font-weight:700; color:var(--text); }
+.stat-label { color:var(--text3); margin-left:4px; }
+@media (max-width:640px) {
+    .toc ol { column-count:1; }
+    .stats { flex-direction:column; gap:8px; }
+    .turn { padding-left:24px; }
+    .turn-number { font-size:10px; width:18px; }
+    .page-container { padding:12px 12px 40px; }
+}
+</style>
+</head>
+<body>
+<div class="page-container">
+<div class="page-header">
+    <h1>OpenCode Session {{SHARE_ID}}</h1>
+    <div class="meta">{{SHARE_URL}}</div>
+</div>
+<div class="stats">
+    <div class="stat"><span class="stat-value">{{TURN_COUNT}}</span><span class="stat-label">turns</span></div>
+    <div class="stat"><span class="stat-value">{{PART_COUNT}}</span><span class="stat-label">parts</span></div>
+</div>
+<div class="search-box">
+    <input type="text" id="searchInput" placeholder="Search conversation..." oninput="filterTurns(this.value)">
+</div>
+<div class="toc">
+    <h3>Table of Contents</h3>
+    {{TOC_HTML}}
+</div>
+{{TURNS_HTML}}
+</div>
+<script>
+function filterTurns(query){
+    var turns=document.querySelectorAll('.turn'),q=query.toLowerCase();
+    turns.forEach(function(t){t.style.display=(!q||t.textContent.toLowerCase().includes(q))?'':'none'});
+}
+</script>
+</body>
+</html>

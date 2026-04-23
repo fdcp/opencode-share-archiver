@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html>
+<head><title>Test Chat</title></head>
+<body>
+  <div class="page-header">
+    <h1>Test Conversation</h1>
+    <div class="meta">opencode v1.2.3 · 2 turns · 10 parts</div>
+  </div>
+  <div class="stats">
+    <div class="stat">10 parts</div>
+    <div class="stat">2 turns</div>
+  </div>
+  <div class="search-box">
+    <input type="text" id="searchInput" placeholder="Search conversation...">
+  </div>
+  <div class="toc">
+    <h3>Table of Contents</h3>
+    <ol>
+      <li><a href="#turn-0" title="Hello world">Hello world</a></li>
+      <li><a href="#turn-1" title="Second question">Second question</a></li>
+    </ol>
+  </div>
+  <div class="turn" id="turn-0">
+    <div class="msg user-msg">
+      <div class="user-role">user</div>
+      <div class="msg-meta">2026-01-01</div>
+      <div class="msg-text">Hello world</div>
+    </div>
+    <div class="tool-part">
+      <div class="part-label">Shell: ls -la</div>
+      <pre class="tool-output">total 0</pre>
+    </div>
+    <div class="tool-part">
+      <div class="part-label">Read</div>
+      <pre class="tool-output">&#x202a;/some/path/file.txt&#x202c; contents here</pre>
+    </div>
+    <div class="reasoning-part">
+      <details><summary>Thinking</summary><p>reasoning content</p></details>
+    </div>
+    <div class="text-part">
+      <div class="text-part-meta">model info</div>
+      <p>Answer here</p>
+    </div>
+  </div>
+  <div class="turn" id="turn-1">
+    <div class="msg user-msg">
+      <div class="user-role">user</div>
+      <div class="msg-meta">2026-01-02</div>
+      <div class="msg-text">Second question</div>
+    </div>
+    <div class="text-part">
+      <p>Second answer</p>
+    </div>
+  </div>
+</body>
+</html>

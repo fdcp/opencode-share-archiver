@@ -1,0 +1,4 @@
+{
+  "slot_1_ComponentA": {"type": "text", "value": "hello"},
+  "slot_2_ComponentB": {"type": "tool", "value": "run cmd"}
+}
