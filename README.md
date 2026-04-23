@@ -14,6 +14,7 @@ Development branch for the OpenCode share archiver skill.
 1. Edit in this repo.
 2. Update `VERSION` when preparing a release.
 3. Use `skill-release-manager` to package, publish, and switch the installed skill.
+4. Run verification only from the release snapshot under `releases/opencode-share-archiver/vX.Y.Z/`.
 
 ## Notes
 
