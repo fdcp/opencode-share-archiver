@@ -4,6 +4,10 @@ Development branch for the OpenCode share archiver skill.
 
 ![chat.html preview](assets/readme-preview.png)
 
+## What it does
+
+This skill turns an `opncd.ai/share/<ID>` conversation into two local artifacts: a structured JSON archive and a self-contained HTML page for offline reading. It is meant for preserving valuable OpenCode sessions, making them searchable and reviewable offline, and verifying that the archived result still looks and behaves correctly over time.
+
 ## What this repo contains
 
 - `scripts/run.py`: scrape a shared session and generate `conversation_final.json` + `chat.html`
