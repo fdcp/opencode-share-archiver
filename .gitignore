@@ -1,1 +1,20 @@
 subskills/visual-verify/assets/baseline/
+README_local.md
+*.pyc     
+
+# Virtualenv
+/.venv/
+/venv/
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+
+/*.egg-info/
+/.installed.cfg
+/*.egg
+/.eggs
+
+.ipynb_checkpoints/
+.ipynb_checkpoints/*
+**/.ipynb_checkpoints/
+.vscode/

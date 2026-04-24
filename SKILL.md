@@ -48,9 +48,9 @@ This single script performs both scraping and HTML generation, producing:
 - `<output_dir>/chat.html`
 - `<output_dir>/conversation.json` (copy of JSON)
 
-### Step 2: Verify output (via visual-verify subskill)
+### Step 2: Optional verification
 
-Run the visual-verify subskill to automatically check output quality:
+Run the visual-verify subskill only when you explicitly want to verify output quality:
 
 ```bash
 python3 ~/.config/opencode/skills/opencode-share-archiver/subskills/visual-verify/scripts/verify.py \
@@ -59,6 +59,15 @@ python3 ~/.config/opencode/skills/opencode-share-archiver/subskills/visual-verif
   --outdir <output_dir>/compare \
   --new-dom-map <output_dir>/dom_map.json \
   --baseline-dom-map ~/.config/opencode/skills/opencode-share-archiver/subskills/visual-verify/assets/baseline/dom_map.json
+```
+
+Or run the combined helper with verification enabled:
+
+```bash
+python3 ~/.config/opencode/skills/opencode-share-archiver/scripts/orchestrate_verify.py \
+  https://opncd.ai/share/<ID> \
+  /path/to/output_dir \
+  --verify
 ```
 
 The subskill:

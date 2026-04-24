@@ -7,7 +7,7 @@ Usage:
 
 Options:
     --skip-scrape               Skip run.py (use existing chat.html in output_dir)
-    --skip-verify               Skip verify.py (only scrape)
+    --verify                    Run verify.py after scrape
     --auto-inject               Auto-call look_at CLI for each visual_spec and inject results
     --lookat-cmd CMD            look_at CLI command template (default: "look_at")
                                 Use {image} and {goal} as placeholders, e.g.:
@@ -24,9 +24,9 @@ Options:
 
 Pipeline:
     1. run.py    → <outdir>/chat.html + dom_map.json + conversation_final.json
-    2. verify.py → <outdir>/compare/compare_report.json + screenshots + visual_specs
-    3. [--auto-inject] For each visual_spec: call look_at CLI (parallel, up to --concurrency)
-    4. [--auto-inject] Inject all summaries into report → final compare_report.json + .md
+    2. [--verify] verify.py → <outdir>/compare/compare_report.json + screenshots + visual_specs
+    3. [--verify, --auto-inject] For each visual_spec: call look_at CLI (parallel, up to --concurrency)
+    4. [--verify, --auto-inject] Inject all summaries into report → final compare_report.json + .md
 
 look_at CLI contract:
     The command must accept two positional args: <image_path> <goal_text>
@@ -65,7 +65,7 @@ def parse_args():
     p.add_argument("share_url", help="https://opncd.ai/share/<ID>")
     p.add_argument("output_dir", help="Output directory (will be created if needed)")
     p.add_argument("--skip-scrape", action="store_true")
-    p.add_argument("--skip-verify", action="store_true")
+    p.add_argument("--verify", action="store_true", help="Run verification after scrape")
     p.add_argument("--auto-inject", action="store_true",
                    help="Auto-call look_at CLI and inject results into the report")
     p.add_argument("--lookat-cmd", default="look_at",
@@ -86,6 +86,31 @@ def parse_args():
 def find_baseline_html(skill_root: Path) -> str | None:
     candidate = skill_root / "subskills" / "visual-verify" / "assets" / "baseline" / "chat.html"
     return str(candidate) if candidate.exists() else None
+
+
+def build_verify_cmd(chat_html: Path, dom_map: Path, compare_dir: Path, old_html: str | None, args, init_baseline: bool = False) -> list:
+    verify_cmd = [
+        sys.executable, str(VERIFY_PY),
+        "--new", str(chat_html),
+        "--outdir", str(compare_dir),
+        "--new-dom-map", str(dom_map),
+    ]
+    if old_html:
+        verify_cmd += ["--old", old_html]
+        baseline_dom = SKILL_ROOT / "subskills" / "visual-verify" / "assets" / "baseline" / "dom_map.json"
+        if baseline_dom.exists():
+            verify_cmd += ["--baseline-dom-map", str(baseline_dom)]
+    if init_baseline:
+        verify_cmd.append("--init-baseline")
+    if args.update_baseline:
+        verify_cmd.append("--update-baseline")
+    if args.fail_on_missing_baseline:
+        verify_cmd.append("--fail-on-missing-baseline")
+    if args.pixel_diff:
+        verify_cmd += ["--pixel-diff", "--pixel-threshold", str(args.pixel_threshold)]
+    if args.verbose:
+        verify_cmd.append("--verbose")
+    return verify_cmd
 
 
 def call_lookat(image_path: str, goal: str, lookat_cmd: str, timeout: int) -> str:
@@ -208,38 +233,40 @@ def main():
             print(f"Error: --skip-scrape given but {chat_html} does not exist.", file=sys.stderr)
             sys.exit(1)
 
-    if args.skip_verify:
-        print("[orchestrate] Step 2: Verify — skipped")
+    if not args.verify:
+        print("[orchestrate] Step 2: Verify — skipped (archive only)")
         sys.exit(0)
 
     old_html = args.old or find_baseline_html(SKILL_ROOT)
 
-    verify_cmd = [
-        sys.executable, str(VERIFY_PY),
-        "--new", str(chat_html),
-        "--outdir", str(compare_dir),
-        "--new-dom-map", str(dom_map),
-    ]
-    if old_html:
-        verify_cmd += ["--old", old_html]
-        baseline_dom = SKILL_ROOT / "subskills" / "visual-verify" / "assets" / "baseline" / "dom_map.json"
-        if baseline_dom.exists():
-            verify_cmd += ["--baseline-dom-map", str(baseline_dom)]
-    if args.init_baseline:
-        verify_cmd.append("--init-baseline")
-    if args.update_baseline:
-        verify_cmd.append("--update-baseline")
-    if args.fail_on_missing_baseline:
-        verify_cmd.append("--fail-on-missing-baseline")
-    if args.pixel_diff:
-        verify_cmd += ["--pixel-diff", "--pixel-threshold", str(args.pixel_threshold)]
-    if args.verbose:
-        verify_cmd.append("--verbose")
+    if not old_html:
+        if args.fail_on_missing_baseline:
+            print("[orchestrate] Baseline missing and --fail-on-missing-baseline is set.", file=sys.stderr)
+            sys.exit(2)
 
-    rc = run_cmd(verify_cmd, "Step 2: Verify")
-    if rc not in (0, 1):
-        print(f"Verify exited with unexpected code {rc}", file=sys.stderr)
-        sys.exit(rc)
+        print("[orchestrate] Baseline missing — bootstrapping then rerunning verification.")
+        bootstrap_cmd = build_verify_cmd(chat_html, dom_map, compare_dir, None, args, init_baseline=True)
+        rc = run_cmd(bootstrap_cmd, "Step 2a: Bootstrap baseline")
+        if rc != 0:
+            print(f"Bootstrap exited with code {rc}", file=sys.stderr)
+            sys.exit(rc)
+
+        old_html = args.old or find_baseline_html(SKILL_ROOT)
+        if not old_html:
+            print("[orchestrate] ERROR — baseline bootstrap did not create a baseline", file=sys.stderr)
+            sys.exit(1)
+
+        verify_cmd = build_verify_cmd(chat_html, dom_map, compare_dir, old_html, args)
+        rc = run_cmd(verify_cmd, "Step 2b: Verify")
+        if rc not in (0, 1):
+            print(f"Verify exited with unexpected code {rc}", file=sys.stderr)
+            sys.exit(rc)
+    else:
+        verify_cmd = build_verify_cmd(chat_html, dom_map, compare_dir, old_html, args, init_baseline=args.init_baseline)
+        rc = run_cmd(verify_cmd, "Step 2: Verify")
+        if rc not in (0, 1):
+            print(f"Verify exited with unexpected code {rc}", file=sys.stderr)
+            sys.exit(rc)
 
     report_path = compare_dir / "compare_report.json"
     if not report_path.exists():
