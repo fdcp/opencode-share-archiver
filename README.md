@@ -2,7 +2,7 @@
 
 Development branch for the OpenCode share archiver skill.
 
-![chat.html preview](file:///workspace/opencode_session_html/session_vHX7u5b5/compare/screenshots/new_header.png)
+![chat.html preview](assets/readme-preview.png)
 
 ## What this repo contains
 
