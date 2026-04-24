@@ -2,6 +2,8 @@
 
 Development branch for the OpenCode share archiver skill.
 
+![chat.html preview](file:///workspace/opencode_session_html/session_vHX7u5b5/compare/screenshots/new_header.png)
+
 ## What this repo contains
 
 - `scripts/run.py`: scrape a shared session and generate `conversation_final.json` + `chat.html`
