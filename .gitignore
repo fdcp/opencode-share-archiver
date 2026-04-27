@@ -1,7 +1,7 @@
 subskills/visual-verify/assets/baseline/
 README_local.md
 *.pyc     
-
+.pytest_cache/
 # Virtualenv
 /.venv/
 /venv/

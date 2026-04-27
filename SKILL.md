@@ -75,9 +75,16 @@ The subskill:
 2. Extracts structured DOM fields (`h1`, `meta`, `stats`, `shellLabel`, `calledLabels`, `fileTools`, etc.)
 3. Screenshots key regions (header, toc, turn1_user, shell_tool, file_tool, reasoning, text_part)
 4. Runs automatic PASS/FAIL checks on DOM fields
-5. Produces `<output_dir>/compare/compare_report.json` and a Markdown summary table
-6. Runs `look_at` visual checks per region (agent reads screenshots with AI image summary)
-7. Diffs `dom_map.json` against baseline to detect structural changes in the share page
+  5. Produces `<output_dir>/compare/compare_report.json` and a Markdown summary table
+    from the extracted DOM fields and run output; this table is generated automatically,
+    not manually summarized
+ 6. Runs visual checks per region only as a separate step when a visual tool/agent is available
+    (`look_at` or equivalent), then injects those summaries back into the report
+ 7. Diffs `dom_map.json` against baseline to detect structural changes in the share page
+
+When baseline HTML is available, the visual subagent compares the new and old
+screenshots for the same region. It should receive the cropped region name and
+the expected behavior, then return a `检测结果分析表` plus a final verdict.
 
 Exit code 0 = all checks passed. Exit code 1 = one or more FAILs.
 

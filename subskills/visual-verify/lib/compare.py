@@ -166,6 +166,75 @@ def _check(id_, name, result, new_val, old_val, explanation) -> dict:
     }
 
 
+def check_html_integrity(new_fields: dict, new_shots: dict) -> dict:
+    """
+    Summarize whether the rendered HTML looks complete enough for review.
+
+    This is a top-level structural check that bundles the core signals the
+    completeness page depends on: title/meta/stats, turn structure, TOC
+    coherence, search box presence, and screenshot coverage.
+    """
+    missing = []
+
+    if not str(new_fields.get("h1", "")).strip():
+        missing.append("h1 missing")
+    if not str(new_fields.get("meta", "")).strip():
+        missing.append("header meta missing")
+
+    stats = new_fields.get("stats", []) or []
+    if len(stats) < 2:
+        missing.append(f"stats incomplete ({len(stats)}/2)")
+
+    toc_count = int(new_fields.get("tocCount", 0) or 0)
+    turn_count = int(new_fields.get("turnCount", 0) or 0)
+    if toc_count <= 0:
+        missing.append("TOC missing")
+    if turn_count <= 0:
+        missing.append("turns missing")
+
+    broken = new_fields.get("brokenTocLinks", []) or []
+    if broken:
+        missing.append(f"broken TOC links ({len(broken)})")
+
+    dup_ids = new_fields.get("duplicateTurnIds", []) or []
+    if dup_ids:
+        missing.append(f"duplicate turn IDs ({len(dup_ids)})")
+
+    empty_turns = new_fields.get("emptyTurns", []) or []
+    if empty_turns:
+        missing.append(f"empty turns ({len(empty_turns)})")
+
+    if not new_fields.get("hasSearchBox", False):
+        missing.append("search box missing")
+
+    captured = 0
+    total = len(SCREENSHOT_REGIONS)
+    missing_regions = []
+    for region, path in new_shots.items():
+        if path and Path(path).exists():
+            captured += 1
+        else:
+            missing_regions.append(region)
+    if missing_regions:
+        missing.append(f"missing screenshots: {', '.join(missing_regions)}")
+
+    result = "pass" if not missing else "fail"
+    new_val = f"core_ok={not missing}; screenshots={captured}/{total}"
+    explanation = (
+        "Core HTML structure and screenshots are present."
+        if not missing
+        else f"HTML completeness failed: {'; '.join(missing)}"
+    )
+    return _check(
+        "html_integrity",
+        "HTML 完整性",
+        result,
+        new_val,
+        "n/a",
+        explanation,
+    )
+
+
 def check_dom_fields(new_fields: dict, old_fields: dict | None) -> list:
     """
     Run structured checks on extracted DOM fields.
@@ -537,13 +606,19 @@ async def compare_versions(
         report = build_baseline_missing_report(
             new_html, new_fields, new_shots, visual_specs, outdir, opts
         )
+        report["checks"].insert(0, check_html_integrity(new_fields, new_shots))
+        report["summary"]["pass_count"] = sum(1 for c in report["checks"] if c["result"] == "pass")
+        report["summary"]["fail_count"] = sum(1 for c in report["checks"] if c["result"] == "fail")
+        report["summary"]["warn_count"] = sum(1 for c in report["checks"] if c["result"] == "warn")
+        report["summary"]["passed"] = report["summary"]["fail_count"] == 0
         report_path = outdir_p / "compare_report.json"
         with open(report_path, "w", encoding="utf-8") as f:
             json.dump(report, f, ensure_ascii=False, indent=2)
         write_markdown_report(report, outdir)
         return report
 
-    checks = check_dom_fields(new_fields, old_fields)
+    checks = [check_html_integrity(new_fields, new_shots)]
+    checks.extend(check_dom_fields(new_fields, old_fields))
 
     # Pixel diff (optional)
     pixel_checks = []

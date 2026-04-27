@@ -60,9 +60,21 @@ To update baseline after a confirmed-good run:
 
 ## Visual check strategy
 
-Default: `look_at` (AI image summary). The caller agent iterates `visual_specs`
-from the report and calls `look_at` on each screenshot, checking for expected
-keywords (e.g., "purple border" for reasoning, "path" for file tools).
+The report has two layers:
+- The `HTML 渲染层` table is generated automatically from Playwright screenshots,
+  DOM extraction, and Python-side checks.
+- Visual conclusions are a separate step. When a visual tool/agent is available,
+  the caller iterates `visual_specs`, inspects each screenshot, and injects the
+  summaries back into the report.
+
+When a baseline exists, the visual subagent compares the new and old screenshots
+for the same region. The caller should provide the cropped region name and the
+expected behavior, and the subagent should return a `检测结果分析表` plus a
+final verdict.
+
+Default visual tool: `look_at` (AI image summary) or an equivalent visual agent.
+The caller should check for expected keywords (e.g., "purple border" for
+reasoning, "path" for file tools).
 
 Optional: `--pixel-diff` adds pixelmatch comparison. Requires consistent
 Chromium binary and fonts across runs to avoid noise. Default threshold: 0.05 (5%).

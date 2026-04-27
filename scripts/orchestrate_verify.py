@@ -8,8 +8,8 @@ Usage:
 Options:
     --skip-scrape               Skip run.py (use existing chat.html in output_dir)
     --verify                    Run verify.py after scrape
-    --auto-inject               Auto-call look_at CLI for each visual_spec and inject results
-    --lookat-cmd CMD            look_at CLI command template (default: "look_at")
+    --auto-inject               Auto-call the bundled visual subagent for each visual_spec
+    --lookat-cmd CMD            Visual subagent command template (default: bundled GPT-4o look_at)
                                 Use {image} and {goal} as placeholders, e.g.:
                                   "my_tool --image {image} --goal {goal}"
     --concurrency N             Max parallel look_at calls (default: 4)
@@ -25,19 +25,20 @@ Options:
 Pipeline:
     1. run.py    → <outdir>/chat.html + dom_map.json + conversation_final.json
     2. [--verify] verify.py → <outdir>/compare/compare_report.json + screenshots + visual_specs
-    3. [--verify, --auto-inject] For each visual_spec: call look_at CLI (parallel, up to --concurrency)
+    3. [--verify, --auto-inject] For each visual_spec: call the visual subagent (parallel, up to --concurrency)
     4. [--verify, --auto-inject] Inject all summaries into report → final compare_report.json + .md
 
-look_at CLI contract:
+Visual subagent contract:
     The command must accept two positional args: <image_path> <goal_text>
-    and print the visual summary to stdout.
-    Example:  look_at /path/to/screenshot.png "check header layout"
-    Override with --lookat-cmd if your tool has a different interface.
+    and print a summary to stdout. The bundled implementation defaults to GPT-4o.
+    Override with --lookat-cmd if you want a different command.
 """
 import argparse
 import json
+import shlex
 import subprocess
 import sys
+from shutil import which
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
@@ -61,16 +62,16 @@ def run_cmd(cmd: list, label: str) -> int:
 
 
 def parse_args():
-    p = argparse.ArgumentParser(description="End-to-end scrape + verify + look_at pipeline")
+    p = argparse.ArgumentParser(description="End-to-end scrape + verify + visual-subagent pipeline")
     p.add_argument("share_url", help="https://opncd.ai/share/<ID>")
     p.add_argument("output_dir", help="Output directory (will be created if needed)")
     p.add_argument("--skip-scrape", action="store_true")
     p.add_argument("--verify", action="store_true", help="Run verification after scrape")
     p.add_argument("--auto-inject", action="store_true",
-                   help="Auto-call look_at CLI and inject results into the report")
-    p.add_argument("--lookat-cmd", default="look_at",
-                   help="look_at CLI command. Use {image} and {goal} as placeholders. "
-                        "Default: 'look_at {image} {goal}'")
+                    help="Auto-call the bundled visual subagent and inject results into the report")
+    p.add_argument("--lookat-cmd", default=f"{sys.executable} {SKILL_ROOT / 'subskills' / 'visual-verify' / 'scripts' / 'look_at.py'}",
+                    help="Visual subagent command. Use {image} and {goal} as placeholders. "
+                         "Default: bundled GPT-4o look_at.py")
     p.add_argument("--concurrency", type=int, default=4)
     p.add_argument("--lookat-timeout", type=int, default=30)
     p.add_argument("--init-baseline", action="store_true")
@@ -113,18 +114,57 @@ def build_verify_cmd(chat_html: Path, dom_map: Path, compare_dir: Path, old_html
     return verify_cmd
 
 
+def lookat_is_available(lookat_cmd: str) -> bool:
+    if not lookat_cmd.strip():
+        return False
+    if "{" in lookat_cmd or "}" in lookat_cmd:
+        token = shlex.split(lookat_cmd)[0]
+    else:
+        token = shlex.split(lookat_cmd)[0]
+    return which(token) is not None
+
+
+def write_visual_spec_bundle(compare_dir: Path, visual_specs: list) -> Path:
+    look_at_dir = compare_dir / "look_at"
+    look_at_dir.mkdir(parents=True, exist_ok=True)
+    bundle_path = look_at_dir / "visual_specs.json"
+    bundle_path.write_text(json.dumps(visual_specs, ensure_ascii=False, indent=2), encoding="utf-8")
+    lines = ["# Visual Specs\n\n"]
+    for vs in visual_specs:
+        lines.append(f"- {vs['region']}: {vs['goal']}\n")
+        if vs.get("new_path"):
+            lines.append(f"  - new: `{vs['new_path']}`\n")
+        if vs.get("old_path"):
+            lines.append(f"  - old: `{vs['old_path']}`\n")
+        lines.append(
+            f"  - inject: `python3 {VERIFY_PY} --inject-visual {vs['region']} \"<new_summary>\" \"<old_summary>\" --outdir {compare_dir}`\n"
+        )
+    (look_at_dir / "README.md").write_text("".join(lines), encoding="utf-8")
+    return bundle_path
+
+
 def call_lookat(image_path: str, goal: str, lookat_cmd: str, timeout: int) -> str:
     if "{image}" in lookat_cmd or "{goal}" in lookat_cmd:
         cmd_str = lookat_cmd.format(image=image_path, goal=goal)
-        cmd = cmd_str.split()
+        cmd = shlex.split(cmd_str)
     else:
-        cmd = lookat_cmd.split() + [image_path, goal]
+        cmd = shlex.split(lookat_cmd) + [image_path, goal]
     result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
     if result.returncode != 0:
         raise RuntimeError(
-            f"look_at exited {result.returncode}: {result.stderr.strip()[:200]}"
+            f"visual subagent exited {result.returncode}: {result.stderr.strip()[:200]}"
         )
     return result.stdout.strip()
+
+
+def build_visual_goal(region: str, goal: str, kind: str) -> str:
+    return (
+        f"区域: {region}\n"
+        f"视图类型: {kind}\n"
+        f"当前检查目标: {goal}\n"
+        "请输出一张 markdown 格式的 检测结果分析表，列出检查项、当前观察、预期、结论；"
+        "最后给出最终结论 pass/fail/info。"
+    )
 
 
 def run_lookat_for_specs(
@@ -140,11 +180,11 @@ def run_lookat_for_specs(
         region = vs["region"]
         goal = vs.get("goal", region)
         if vs.get("new_path"):
-            tasks.append(("new", region, vs["new_path"], goal))
+            tasks.append(("new", region, vs["new_path"], build_visual_goal(region, goal, "new")))
         if vs.get("old_path"):
-            tasks.append(("old", region, vs["old_path"], goal))
+            tasks.append(("old", region, vs["old_path"], build_visual_goal(region, goal, "old")))
 
-    print(f"\n[orchestrate] Step 3: Running look_at for {len(tasks)} image(s) "
+    print(f"\n[orchestrate] Step 3: Running visual subagent for {len(tasks)} image(s) "
           f"(concurrency={concurrency}, timeout={timeout}s)")
 
     look_at_dir.mkdir(parents=True, exist_ok=True)
@@ -161,18 +201,18 @@ def run_lookat_for_specs(
                 summary = future.result()
                 summaries[region][kind] = summary
                 (look_at_dir / f"{region}_{kind}.txt").write_text(summary, encoding="utf-8")
-                print(f"  ✓ look_at {region} [{kind}]: {summary[:60]}...")
+                print(f"  ✓ visual {region} [{kind}]: {summary[:60]}...")
             except Exception as exc:
                 msg = f"ERROR: {exc}"
                 summaries[region][kind] = msg
                 failures.append({"region": region, "kind": kind, "error": str(exc)})
-                print(f"  ✗ look_at {region} [{kind}]: {exc}", file=sys.stderr)
+                print(f"  ✗ visual {region} [{kind}]: {exc}", file=sys.stderr)
 
     if failures:
         (look_at_dir / "failures.json").write_text(
             json.dumps(failures, indent=2), encoding="utf-8"
         )
-        print(f"  ⚠️  {len(failures)} look_at call(s) failed — see {look_at_dir}/failures.json")
+        print(f"  ⚠️  {len(failures)} visual call(s) failed — see {look_at_dir}/failures.json")
 
     return summaries
 
@@ -280,21 +320,26 @@ def main():
 
     if args.auto_inject and visual_specs:
         look_at_dir = compare_dir / "look_at"
-        summaries = run_lookat_for_specs(
-            visual_specs,
-            lookat_cmd=args.lookat_cmd,
-            concurrency=args.concurrency,
-            timeout=args.lookat_timeout,
-            look_at_dir=look_at_dir,
-        )
-        print(f"\n[orchestrate] Step 4: Injecting look_at results into report...")
-        report = inject_summaries(report, summaries, compare_dir)
-        print(f"  ✓ Injection complete")
+        if lookat_is_available(args.lookat_cmd):
+            summaries = run_lookat_for_specs(
+                visual_specs,
+                lookat_cmd=args.lookat_cmd,
+                concurrency=args.concurrency,
+                timeout=args.lookat_timeout,
+                look_at_dir=look_at_dir,
+            )
+            print(f"\n[orchestrate] Step 4: Injecting look_at results into report...")
+            report = inject_summaries(report, summaries, compare_dir)
+            print(f"  ✓ Injection complete")
+        else:
+            bundle_path = write_visual_spec_bundle(compare_dir, visual_specs)
+            print(f"\n[orchestrate] Step 3: visual subagent unavailable; wrote visual specs to {bundle_path}")
+            print("  Use the visual agent to inspect screenshots, then inject with --inject-visual.")
     elif args.auto_inject and not visual_specs:
         print("\n[orchestrate] Step 3: No visual specs — nothing to inject.")
     else:
         if visual_specs:
-            print(f"\n[orchestrate] Step 3: {len(visual_specs)} visual spec(s) ready for look_at.")
+            print(f"\n[orchestrate] Step 3: {len(visual_specs)} visual spec(s) ready for the subagent.")
             print("  Re-run with --auto-inject to process automatically, or inject manually:")
             for vs in visual_specs:
                 region = vs["region"]
