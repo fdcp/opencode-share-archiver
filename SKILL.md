@@ -9,7 +9,7 @@ compatibility: opencode
 
 ## Skill Responsibilities
 
-Convert a live `opncd.ai/share/<ID>` shared conversation (SPA, JS-rendered) into:
+Convert a live `opncd.ai/share/<ID>` shared conversation (SPA, JS-rendered) or a local OpenCode session into:
 1. `conversation_final.json` — structured JSON with all turns and parts
 2. `chat.html` — self-contained offline-viewable HTML with dark theme, TOC, search, collapsible sections
 
@@ -18,6 +18,7 @@ Convert a live `opncd.ai/share/<ID>` shared conversation (SPA, JS-rendered) into
 - "Archive / download / save this share link: https://opncd.ai/share/..."
 - "Convert opncd.ai/share/... to HTML"
 - "Make a local copy of this OpenCode session"
+- "Archive a local OpenCode session with oc-archive"
 - Any URL matching `opncd.ai/share/<ID>`
 
 ## Prerequisites
@@ -47,6 +48,27 @@ This single script performs both scraping and HTML generation, producing:
 - `<output_dir>/conversation_final.json`
 - `<output_dir>/chat.html`
 - `<output_dir>/conversation.json` (copy of JSON)
+
+### Step 1b: Archive a local session
+
+```bash
+python3 ~/.config/opencode/skills/opencode-share-archiver/scripts/oc_archive.py \
+  <session_id> \
+  <output_dir>
+```
+
+Or use the wrapper command:
+
+```bash
+oc-archive <session_id> <output_dir>
+```
+
+This uses the strict session flow:
+1. share the session
+2. archive the generated share URL
+3. remove the share link in cleanup
+
+This writes the same artifacts under `<output_dir>/<session_id>/`.
 
 ### Step 2: Optional verification
 
