@@ -1,13 +1,8 @@
 #!/usr/bin/env python3
-"""Archive a local OpenCode session by session ID directly from the local DB.
+"""Archive a local OpenCode session by session ID.
 
-Reads the OpenCode SQLite database directly — no share URL or network access required.
-
-  <output_dir>/<session_id>/
-
-Outputs:
-  - conversation_final.json  normalized session archive
-  - chat.html                self-contained HTML archive viewer
+This is the public entry point for local DB archiving.
+It writes into <output_root>/<session_id>/ and delegates to run_db.py.
 """
 
 from __future__ import annotations
@@ -28,7 +23,8 @@ def esc(text: object) -> str:
 def parse_args():
     p = argparse.ArgumentParser(description="Archive an OpenCode session by session ID")
     p.add_argument("session_id", help="OpenCode session ID, e.g. ses_...")
-    p.add_argument("output_dir", help="Directory to write output files into")
+    p.add_argument("output_root", help="Directory root under which the session directory is created")
+    p.add_argument("--validate", action="store_true", help="Run three-layer validation after archiving")
     return p.parse_args()
 
 
@@ -223,19 +219,13 @@ function filterMessages(q) {{
 </html>'''
 
 
-def write_outputs(archive: dict, session_id: str, output_dir: str) -> Path:
-    root = Path(output_dir) / session_id
-    root.mkdir(parents=True, exist_ok=True)
-    (root / "conversation_final.json").write_text(json.dumps(archive, ensure_ascii=False, indent=2), encoding="utf-8")
-    (root / "conversation.json").write_text(json.dumps(archive.get("raw", {}), ensure_ascii=False, indent=2), encoding="utf-8")
-    (root / "chat.html").write_text(render_html(archive, session_id), encoding="utf-8")
-    return root
-
-
-def archive_db(session_id: str, output_dir: str) -> Path:
+def archive_db(session_id: str, output_root: str, validate: bool = False) -> Path:
     script = Path(__file__).with_name("run_db.py")
-    out = Path(output_dir) / session_id
-    proc = subprocess.run([sys.executable, str(script), session_id, str(out)], capture_output=True, text=True)
+    out = Path(output_root) / session_id
+    cmd = [sys.executable, str(script), session_id, str(out)]
+    if validate:
+        cmd.append("--validate")
+    proc = subprocess.run(cmd, capture_output=True, text=True)
     if proc.returncode != 0:
         raise SystemExit(proc.stderr.strip() or f"run_db.py exited with {proc.returncode}")
     print(proc.stdout, end="")
@@ -244,7 +234,7 @@ def archive_db(session_id: str, output_dir: str) -> Path:
 
 def main():
     args = parse_args()
-    out_dir = archive_db(args.session_id, args.output_dir)
+    out_dir = archive_db(args.session_id, args.output_root, validate=args.validate)
     print(f"[oc-archive] OK — wrote DB-based archive to {out_dir}")
     print(f"  HTML : {out_dir / 'chat.html'}")
 

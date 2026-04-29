@@ -9,7 +9,7 @@ import subprocess
 from pathlib import Path
 
 if len(sys.argv) < 3:
-    print("Usage: python3 run_db.py <session_id> <output_dir> [--validate]", file=sys.stderr)
+    print("Usage: python3 run_db.py <session_id> <output_dir>", file=sys.stderr)
     sys.exit(1)
 
 SESSION_ID = sys.argv[1]

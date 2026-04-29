@@ -47,25 +47,25 @@ Produces:
 ### Flow B: Archive from local session DB (preferred)
 
 ```bash
-python3 ~/.config/opencode/skills/opencode-share-archiver/scripts/run_db.py \
+python3 ~/.config/opencode/skills/opencode-share-archiver/scripts/oc_archive.py \
   <session_id> \
   <output_dir>
 ```
 
-Or via the wrapper:
+Or via the installed command:
 
 ```bash
 oc-archive <session_id> <output_dir>
 ```
 
-Which internally calls `oc_archive.py` → `run_db.py`. Reads the local OpenCode SQLite DB directly — no share URL or network access required.
+This is the public entry point for local DB archiving. It reads the local OpenCode SQLite DB directly, then delegates to the internal `run_db.py` implementation and writes into `<output_dir>/<session_id>/`.
 
-Produces the same artifacts as Flow A under `<output_dir>/`.
+Produces the same artifacts as Flow A under `<output_dir>/<session_id>/`.
 
 Optional flag `--validate` triggers the `validate-db` subskill immediately after archiving:
 
 ```bash
-python3 run_db.py <session_id> <output_dir> --validate
+python3 oc_archive.py <session_id> <output_dir> --validate
 ```
 
 ### Step 2: Validate output (optional, validate-db subskill)
@@ -118,7 +118,7 @@ See `subskills/visual-verify/SKILL.md` for full documentation.
 
 | Subskill | Purpose | When to use |
 |---|---|---|
-| `validate-db` | Validate a single `chat.html` (3 layers: static + DOM + visual) | After `run_db.py`, on explicit request |
+| `validate-db` | Validate a single `chat.html` (3 layers: static + DOM + visual) | After `oc_archive.py`, on explicit request |
 | `visual-verify` | Regression compare new vs baseline HTML | After `run.py` (share URL flow), on explicit request |
 
 ## Entry Points and Validation Triggers
@@ -128,8 +128,8 @@ See `subskills/visual-verify/SKILL.md` for full documentation.
 | Share URL archive (no verify) | `run.py <url> <outdir>` | None |
 | Share URL archive + regression verify | `orchestrate_verify.py <url> <outdir> --verify` | `--verify` flag → visual-verify subskill |
 | Share URL archive + single validation | `validate_html.py <chat.html>` | Manual call after `run.py` |
-| Local DB archive (no verify) | `oc_archive.py <session_id> <outdir>` or `run_db.py <session_id> <outdir>` | None |
-| Local DB archive + validation | `run_db.py <session_id> <outdir> --validate` | `--validate` flag → validate-db subskill |
+| Local DB archive (no verify) | `oc_archive.py <session_id> <outdir>` | None |
+| Local DB archive + validation | `oc_archive.py <session_id> <outdir> --validate` | `--validate` flag → validate-db subskill |
 | Any chat.html standalone validation | `validate_html.py <chat.html>` | Manual call at any time |
 
 ## Output Standards

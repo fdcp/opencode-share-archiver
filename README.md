@@ -8,11 +8,13 @@ Development branch for the OpenCode share archiver skill.
 
 This skill turns an `opncd.ai/share/<ID>` conversation into two local artifacts: a structured JSON archive and a self-contained HTML page for offline reading. It is meant for preserving valuable OpenCode sessions, making them searchable and reviewable offline, and verifying that the archived result still looks and behaves correctly over time.
 
-It also supports archiving a local OpenCode session by session ID via `oc-archive`, which shares the session, archives the generated share URL, then removes the share link. Output is written to `<output_dir>/<session_id>/`.
+It also supports archiving a local OpenCode session by session ID via `oc-archive`. The archive is written to `<output_dir>/<session_id>/`.
 
 ## What this repo contains
 
 - `scripts/run.py`: scrape a shared session and generate `conversation_final.json` + `chat.html`
+- `scripts/oc_archive.py`: local DB archive entry point for a session ID
+- `scripts/run_db.py`: internal local DB archive implementation
 - `scripts/orchestrate_verify.py`: run the full verify pipeline
 - `subskills/visual-verify/`: DOM, screenshot, and visual regression checks
 - `VERSION`: release version for this development branch

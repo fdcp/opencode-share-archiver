@@ -1,11 +1,11 @@
 ---
 name: validate-db
-description: Validate a locally-generated chat.html (from run_db.py) with three layers — static HTML parser, Playwright DOM checks, and gpt-4o visual checks. Triggered when the user explicitly asks to validate or verify a chat.html produced by the local DB archiver.
+description: Validate a locally-generated chat.html (from oc_archive.py) with three layers — static HTML parser, Playwright DOM checks, and gpt-4o visual checks. Triggered when the user explicitly asks to validate or verify a chat.html produced by the local DB archiver.
 ---
 
 # validate-db
 
-Standalone validator for a single `chat.html` produced by `run_db.py`.
+Standalone validator for a single `chat.html` produced by `oc_archive.py`.
 Does **not** require a baseline or a second HTML — this is not a regression comparator.
 
 ## Three Validation Layers
@@ -53,16 +53,16 @@ pip install playwright
 python -m playwright install chromium
 ```
 
-## Integration with run_db.py
+## Integration with oc_archive.py
 
-`run_db.py` does **not** auto-trigger this validator. Call it explicitly after archiving:
+`oc_archive.py` does **not** auto-trigger this validator unless `--validate` is passed. Call it explicitly after archiving when needed:
 
 ```bash
-python3 ~/.config/opencode/skills/opencode-share-archiver/scripts/run_db.py \
+python3 ~/.config/opencode/skills/opencode-share-archiver/scripts/oc_archive.py \
   <session_id> <output_dir>
 
 python3 ~/.config/opencode/skills/opencode-share-archiver/subskills/validate-db/scripts/validate_html.py \
-  <output_dir>/chat.html \
-  --json-out <output_dir>/validate_report.json \
-  --md-out   <output_dir>/validate_report.md
+  <output_dir>/<session_id>/chat.html \
+  --json-out <output_dir>/<session_id>/validate_report.json \
+  --md-out   <output_dir>/<session_id>/validate_report.md
 ```
