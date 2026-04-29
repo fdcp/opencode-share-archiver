@@ -121,6 +121,17 @@ See `subskills/visual-verify/SKILL.md` for full documentation.
 | `validate-db` | Validate a single `chat.html` (3 layers: static + DOM + visual) | After `run_db.py`, on explicit request |
 | `visual-verify` | Regression compare new vs baseline HTML | After `run.py` (share URL flow), on explicit request |
 
+## Entry Points and Validation Triggers
+
+| Scenario | Entry point | Validation triggered |
+|---|---|---|
+| Share URL archive (no verify) | `run.py <url> <outdir>` | None |
+| Share URL archive + regression verify | `orchestrate_verify.py <url> <outdir> --verify` | `--verify` flag → visual-verify subskill |
+| Share URL archive + single validation | `validate_html.py <chat.html>` | Manual call after `run.py` |
+| Local DB archive (no verify) | `oc_archive.py <session_id> <outdir>` or `run_db.py <session_id> <outdir>` | None |
+| Local DB archive + validation | `run_db.py <session_id> <outdir> --validate` | `--validate` flag → validate-db subskill |
+| Any chat.html standalone validation | `validate_html.py <chat.html>` | Manual call at any time |
+
 ## Output Standards
 
 ### JSON Schema (`conversation_final.json`)

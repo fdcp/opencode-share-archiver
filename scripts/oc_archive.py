@@ -1,14 +1,12 @@
 #!/usr/bin/env python3
-"""Archive a local OpenCode session by session ID.
+"""Archive a local OpenCode session by session ID directly from the local DB.
 
-This command shares the target session and archives the generated share URL into a
-self-contained offline HTML archive:
+Reads the OpenCode SQLite database directly — no share URL or network access required.
 
   <output_dir>/<session_id>/
 
 Outputs:
   - conversation_final.json  normalized session archive
-  - conversation.json        raw exported JSON
   - chat.html                self-contained HTML archive viewer
 """
 
