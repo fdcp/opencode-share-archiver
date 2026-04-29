@@ -32,8 +32,16 @@ if len(sys.argv) < 3:
     sys.exit(1)
 
 SHARE_URL = sys.argv[1]
-OUTPUT_DIR = sys.argv[2]
+_OUTPUT_ROOT = sys.argv[2]
+
+def _extract_share_id(url: str) -> str:
+    m = re.search(r'/share/([^/?#]+)', url)
+    return m.group(1) if m else re.sub(r'[^\w-]', '_', url)[-32:]
+
+_SHARE_ID = _extract_share_id(SHARE_URL)
+OUTPUT_DIR = os.path.join(_OUTPUT_ROOT, f"{_SHARE_ID}_url")
 os.makedirs(OUTPUT_DIR, exist_ok=True)
+print(f"[run] share_id={_SHARE_ID}  output={OUTPUT_DIR}")
 
 # ── Helper functions ──────────────────────────────────────────────────────────
 

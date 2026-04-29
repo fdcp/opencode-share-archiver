@@ -249,9 +249,16 @@ def inject_summaries(report: dict, summaries: dict, outdir: Path) -> dict:
     return report
 
 
+def _extract_share_id(url: str) -> str:
+    import re
+    m = re.search(r'/share/([^/?#]+)', url)
+    return m.group(1) if m else re.sub(r'[^\w-]', '_', url)[-32:]
+
+
 def main():
     args = parse_args()
-    outdir = Path(args.output_dir)
+    share_id = _extract_share_id(args.share_url)
+    outdir = Path(args.output_dir) / f"{share_id}_url"
     outdir.mkdir(parents=True, exist_ok=True)
     compare_dir = outdir / "compare"
     chat_html = outdir / "chat.html"
@@ -261,7 +268,7 @@ def main():
 
     if not args.skip_scrape:
         rc = run_cmd(
-            [sys.executable, str(RUN_PY), args.share_url, str(outdir)],
+            [sys.executable, str(RUN_PY), args.share_url, args.output_dir],
             "Step 1: Scrape"
         )
         if rc != 0:
