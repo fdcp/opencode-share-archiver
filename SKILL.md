@@ -9,7 +9,7 @@ compatibility: opencode
 
 ## Skill Responsibilities
 
-Convert a live `opncd.ai/share/<ID>` shared conversation (SPA, JS-rendered) or a local OpenCode session into:
+Convert a live `opncd.ai/share/<ID>` shared conversation or a **local OpenCode session DB** into:
 1. `conversation_final.json` — structured JSON with all turns and parts
 2. `chat.html` — self-contained offline-viewable HTML with dark theme, TOC, search, collapsible sections
 
@@ -24,19 +24,14 @@ Convert a live `opncd.ai/share/<ID>` shared conversation (SPA, JS-rendered) or a
 ## Prerequisites
 
 ```bash
-# Python packages
 pip install playwright
-
-# Playwright browser (Chromium headless shell)
 python -m playwright install chromium
-
-# CJK font support (for Chinese content)
 apt-get install -y fonts-noto-cjk
 ```
 
 ## Execution Steps
 
-### Step 1: Scrape the share page
+### Flow A: Archive from share URL
 
 ```bash
 python3 ~/.config/opencode/skills/opencode-share-archiver/scripts/run.py \
@@ -44,35 +39,60 @@ python3 ~/.config/opencode/skills/opencode-share-archiver/scripts/run.py \
     /path/to/output_dir
 ```
 
-This single script performs both scraping and HTML generation, producing:
+Produces:
 - `<output_dir>/conversation_final.json`
 - `<output_dir>/chat.html`
-- `<output_dir>/conversation.json` (copy of JSON)
+- `<output_dir>/conversation.json`
 
-### Step 1b: Archive a local session
+### Flow B: Archive from local session DB (preferred)
 
 ```bash
-python3 ~/.config/opencode/skills/opencode-share-archiver/scripts/oc_archive.py \
+python3 ~/.config/opencode/skills/opencode-share-archiver/scripts/run_db.py \
   <session_id> \
   <output_dir>
 ```
 
-Or use the wrapper command:
+Or via the wrapper:
 
 ```bash
 oc-archive <session_id> <output_dir>
 ```
 
-This uses the strict session flow:
-1. share the session
-2. archive the generated share URL
-3. remove the share link in cleanup
+Which internally calls `oc_archive.py` → `run_db.py`. Reads the local OpenCode SQLite DB directly — no share URL or network access required.
 
-This writes the same artifacts under `<output_dir>/<session_id>/`.
+Produces the same artifacts as Flow A under `<output_dir>/`.
 
-### Step 2: Optional verification
+Optional flag `--validate` triggers the `validate-db` subskill immediately after archiving:
 
-Run the visual-verify subskill only when you explicitly want to verify output quality:
+```bash
+python3 run_db.py <session_id> <output_dir> --validate
+```
+
+### Step 2: Validate output (optional, validate-db subskill)
+
+Run only when you want to explicitly verify the generated `chat.html`:
+
+```bash
+python3 ~/.config/opencode/skills/opencode-share-archiver/subskills/validate-db/scripts/validate_html.py \
+  <output_dir>/chat.html \
+  --json-out <output_dir>/validate_report.json \
+  --md-out   <output_dir>/validate_report.md
+```
+
+Three validation layers:
+1. **Static** (9 checks) — pure Python `html.parser`: structure, turns, TOC links, duplicates, search box
+2. **DOM** (14 checks) — Playwright + `compare.py`: header meta, shell label, file tool markers, reasoning block, etc.
+3. **Visual** (5 regions) — Playwright screenshots → `look_at.py` (gpt-4o): toc, user message, tool block, text part, reasoning
+
+Exits 0 if no `fail` results. Outputs `validate_report.json` + `validate_report.md` + `validate_screenshots/`.
+
+Use `--skip-dom` or `--skip-visual` to run only a subset of layers.
+
+See `subskills/validate-db/SKILL.md` for full documentation.
+
+### Step 3: Visual regression verify (optional, visual-verify subskill)
+
+Use only when comparing a new HTML against a known-good baseline (regression testing):
 
 ```bash
 python3 ~/.config/opencode/skills/opencode-share-archiver/subskills/visual-verify/scripts/verify.py \
@@ -83,7 +103,7 @@ python3 ~/.config/opencode/skills/opencode-share-archiver/subskills/visual-verif
   --baseline-dom-map ~/.config/opencode/skills/opencode-share-archiver/subskills/visual-verify/assets/baseline/dom_map.json
 ```
 
-Or run the combined helper with verification enabled:
+Or with the orchestrator (Flow A only):
 
 ```bash
 python3 ~/.config/opencode/skills/opencode-share-archiver/scripts/orchestrate_verify.py \
@@ -92,35 +112,14 @@ python3 ~/.config/opencode/skills/opencode-share-archiver/scripts/orchestrate_ve
   --verify
 ```
 
-The subskill:
-1. Renders both HTMLs in headless Chromium
-2. Extracts structured DOM fields (`h1`, `meta`, `stats`, `shellLabel`, `calledLabels`, `fileTools`, etc.)
-3. Screenshots key regions (header, toc, turn1_user, shell_tool, file_tool, reasoning, text_part)
-4. Runs automatic PASS/FAIL checks on DOM fields
-  5. Produces `<output_dir>/compare/compare_report.json` and a Markdown summary table
-    from the extracted DOM fields and run output; this table is generated automatically,
-    not manually summarized
- 6. Runs visual checks per region only as a separate step when a visual tool/agent is available
-    (`look_at` or equivalent), then injects those summaries back into the report
- 7. Diffs `dom_map.json` against baseline to detect structural changes in the share page
-
-When baseline HTML is available, the visual subagent compares the new and old
-screenshots for the same region. It should receive the cropped region name and
-the expected behavior, then return a `检测结果分析表` plus a final verdict.
-
-Exit code 0 = all checks passed. Exit code 1 = one or more FAILs.
-
-After a confirmed-good run, update the baseline explicitly:
-```bash
-  --update-baseline
-```
-
-For strict pixel-level regression testing (optional):
-```bash
-  --pixel-diff --pixel-threshold 0.05
-```
-
 See `subskills/visual-verify/SKILL.md` for full documentation.
+
+## Subskills
+
+| Subskill | Purpose | When to use |
+|---|---|---|
+| `validate-db` | Validate a single `chat.html` (3 layers: static + DOM + visual) | After `run_db.py`, on explicit request |
+| `visual-verify` | Regression compare new vs baseline HTML | After `run.py` (share URL flow), on explicit request |
 
 ## Output Standards
 
@@ -169,4 +168,5 @@ See `subskills/visual-verify/SKILL.md` for full documentation.
 - The share page is a SPA (SolidJS). Must use Playwright with `wait_until="networkidle"`.
 - Collapsible items (`[data-component="collapsible"][data-closed=""]`) must be clicked open in two passes with scroll in between to trigger lazy loading.
 - Tool output is in `pre[data-slot="bash-pre"]` inside `[data-slot="collapsible-content"]`.
+- `run_db.py` reads the OpenCode SQLite DB directly via `opencode db path`. A new turn starts on each user message; consecutive assistant parts are merged into the same turn.
 - See `references/dom-selectors.md` for full selector map.

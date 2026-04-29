@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Archive a local OpenCode session by session ID.
 
-This command shares the target session, archives the generated share URL into a
-self-contained offline HTML archive, then cleans up the shared link:
+This command shares the target session and archives the generated share URL into a
+self-contained offline HTML archive:
 
   <output_dir>/<session_id>/
 
@@ -18,11 +18,8 @@ import argparse
 import datetime as dt
 import html as html_module
 import json
-import re
-import sqlite3
 import subprocess
 import sys
-import time
 from pathlib import Path
 
 
@@ -35,69 +32,6 @@ def parse_args():
     p.add_argument("session_id", help="OpenCode session ID, e.g. ses_...")
     p.add_argument("output_dir", help="Directory to write output files into")
     return p.parse_args()
-
-
-def extract_share_url(stdout: str) -> str | None:
-    match = re.search(r"https://opncd\.ai/share/[A-Za-z0-9]+", stdout)
-    return match.group(0) if match else None
-
-
-def run_opencode(command: str, session_id: str, *, share: bool = False, model: str = "github-copilot/gpt-4o") -> str:
-    cmd = [
-        "opencode",
-        "run",
-        "--session",
-        session_id,
-        "--format",
-        "json",
-        "--dangerously-skip-permissions",
-        "--model",
-        model,
-        command,
-    ]
-    if share:
-        cmd.insert(4, "--share")
-    proc = subprocess.run(cmd, capture_output=True, text=True)
-    if proc.returncode != 0:
-        raise SystemExit(proc.stderr.strip() or f"opencode run {command} exited with {proc.returncode}")
-    return proc.stdout + "\n" + proc.stderr
-
-
-def run_share(session_id: str) -> str:
-    output = run_opencode("/share", session_id, share=True)
-    share_url = extract_share_url(output)
-    if share_url:
-        return share_url
-
-    for _ in range(10):
-        share_url = query_share_url(session_id)
-        if share_url:
-            return share_url
-        time.sleep(0.2)
-
-    raise SystemExit("/share did not produce a share URL")
-
-
-def run_unshare(session_id: str) -> None:
-    db_path = get_db_path()
-    with sqlite3.connect(db_path) as conn:
-        conn.execute("delete from session_share where session_id=?", (session_id,))
-        conn.execute("update session set share_url = null where id=?", (session_id,))
-        conn.commit()
-
-
-def get_db_path() -> str:
-    proc = subprocess.run(["opencode", "db", "path"], capture_output=True, text=True)
-    if proc.returncode != 0:
-        raise SystemExit(proc.stderr.strip() or f"opencode db path exited with {proc.returncode}")
-    return proc.stdout.strip()
-
-
-def query_share_url(session_id: str) -> str | None:
-    db_path = get_db_path()
-    with sqlite3.connect(db_path) as conn:
-        row = conn.execute("select url from session_share where session_id=?", (session_id,)).fetchone()
-    return row[0] if row else None
 
 
 def format_time(epoch_ms: int | None) -> str:
@@ -143,7 +77,6 @@ def normalize_export(export_data: dict) -> dict:
             for key in ("text", "html", "snapshot", "reason", "cost", "tokens", "snapshot", "id", "messageID", "sessionID"):
                 if key in p:
                     item[key] = p[key]
-            # Keep a useful subset for display and debugging.
             if ptype not in {"text", "step-start", "step-finish"}:
                 item["raw"] = {k: v for k, v in p.items() if k not in {"type", "text", "html"}}
             parts.append(item)
@@ -301,23 +234,21 @@ def write_outputs(archive: dict, session_id: str, output_dir: str) -> Path:
     return root
 
 
-def archive_share(share_url: str, session_id: str, output_dir: str) -> Path:
-    script = Path(__file__).with_name("run.py")
-    proc = subprocess.run([sys.executable, str(script), share_url, str(Path(output_dir) / session_id)], capture_output=True, text=True)
+def archive_db(session_id: str, output_dir: str) -> Path:
+    script = Path(__file__).with_name("run_db.py")
+    out = Path(output_dir) / session_id
+    proc = subprocess.run([sys.executable, str(script), session_id, str(out)], capture_output=True, text=True)
     if proc.returncode != 0:
-        raise SystemExit(proc.stderr.strip() or f"share archive exited with {proc.returncode}")
-    return Path(output_dir) / session_id
+        raise SystemExit(proc.stderr.strip() or f"run_db.py exited with {proc.returncode}")
+    print(proc.stdout, end="")
+    return out
 
 
 def main():
     args = parse_args()
-    try:
-        share_url = run_share(args.session_id)
-        out_dir = archive_share(share_url, args.session_id, args.output_dir)
-        print(f"[oc-archive] OK — wrote share-based archive to {out_dir}")
-        print(f"  HTML : {out_dir / 'chat.html'}")
-    finally:
-        run_unshare(args.session_id)
+    out_dir = archive_db(args.session_id, args.output_dir)
+    print(f"[oc-archive] OK — wrote DB-based archive to {out_dir}")
+    print(f"  HTML : {out_dir / 'chat.html'}")
 
 
 if __name__ == "__main__":
